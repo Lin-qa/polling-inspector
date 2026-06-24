@@ -20,7 +20,7 @@ class CheckItem:
     headers: dict[str, str]
     params: str
     success_rule: str
-    interval_ms: int
+    interval_seconds: float
     timeout_ms: int
     notify_group: str
 

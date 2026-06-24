@@ -34,7 +34,7 @@ def create_template(path: Path) -> None:
                 "请求头JSON",
                 "请求参数",
                 "成功判断",
-                "轮询间隔ms",
+                "轮询间隔秒",
                 "超时时间ms",
                 "通知组",
             ],
@@ -48,7 +48,7 @@ def create_template(path: Path) -> None:
                     "{}",
                     "无",
                     "status=200",
-                    3600000,
+                    3600,
                     5000,
                     "默认组",
                 ],
@@ -61,7 +61,7 @@ def create_template(path: Path) -> None:
                     '{"Authorization":"Bearer ${token}","Content-Type":"application/json"}',
                     '{"bizId":"DEMO-001"}',
                     "status=200; code=0",
-                    3600000,
+                    3600,
                     5000,
                     "默认组",
                 ],
@@ -140,7 +140,10 @@ def _load_checks(sheet) -> list[CheckItem]:
                 headers=_parse_json_object(_value(row, header_index, "请求头JSON"), "请求头JSON"),
                 params=str(_value(row, header_index, "请求参数") or "").strip(),
                 success_rule=str(_value(row, header_index, "成功判断") or "").strip(),
-                interval_ms=_int_or_default(_value_any(row, header_index, ["轮询间隔ms", "轮询间隔毫秒"]), _legacy_seconds_to_ms(_value(row, header_index, "轮询间隔秒"), 3600000)),
+                interval_seconds=_float_or_default(
+                    _value(row, header_index, "轮询间隔秒"),
+                    _legacy_ms_to_seconds(_value_any(row, header_index, ["轮询间隔ms", "轮询间隔毫秒"]), 3600),
+                ),
                 timeout_ms=_int_or_default(_value_any(row, header_index, ["超时时间ms", "超时时间毫秒"]), _legacy_seconds_to_ms(_value(row, header_index, "超时时间秒"), 5000)),
                 notify_group=str(_value(row, header_index, "通知组") or "默认组").strip(),
             )
@@ -253,6 +256,15 @@ def _legacy_seconds_to_ms(value: Any, default_ms: int) -> int:
         return int(float(value) * 1000)
     except (TypeError, ValueError):
         return default_ms
+
+
+def _legacy_ms_to_seconds(value: Any, default_seconds: float) -> float:
+    if value in (None, ""):
+        return default_seconds
+    try:
+        return float(value) / 1000
+    except (TypeError, ValueError):
+        return default_seconds
 
 
 def _widths_for_sheet(title: str) -> list[int]:
