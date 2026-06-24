@@ -21,6 +21,7 @@ class CheckItem:
     params: str
     success_rule: str
     interval_seconds: float
+    abnormal_interval_seconds: float
     timeout_ms: int
     notify_group: str
 

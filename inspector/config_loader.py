@@ -35,6 +35,7 @@ def create_template(path: Path) -> None:
                 "请求参数",
                 "成功判断",
                 "轮询间隔秒",
+                "异常后轮询间隔秒",
                 "超时时间ms",
                 "通知组",
             ],
@@ -49,6 +50,7 @@ def create_template(path: Path) -> None:
                     "无",
                     "status=200",
                     3600,
+                    600,
                     5000,
                     "默认组",
                 ],
@@ -62,6 +64,7 @@ def create_template(path: Path) -> None:
                     '{"bizId":"DEMO-001"}',
                     "status=200; code=0",
                     3600,
+                    600,
                     5000,
                     "默认组",
                 ],
@@ -143,6 +146,10 @@ def _load_checks(sheet) -> list[CheckItem]:
                 interval_seconds=_float_or_default(
                     _value(row, header_index, "轮询间隔秒"),
                     _legacy_ms_to_seconds(_value_any(row, header_index, ["轮询间隔ms", "轮询间隔毫秒"]), 3600),
+                ),
+                abnormal_interval_seconds=_float_or_default(
+                    _value_any(row, header_index, ["异常后轮询间隔秒", "异常轮询间隔秒", "异常后轮询时间秒"]),
+                    600,
                 ),
                 timeout_ms=_int_or_default(_value_any(row, header_index, ["超时时间ms", "超时时间毫秒"]), _legacy_seconds_to_ms(_value(row, header_index, "超时时间秒"), 5000)),
                 notify_group=str(_value(row, header_index, "通知组") or "默认组").strip(),
@@ -269,7 +276,7 @@ def _legacy_ms_to_seconds(value: Any, default_seconds: float) -> float:
 
 def _widths_for_sheet(title: str) -> list[int]:
     if title == CHECK_SHEET:
-        return [10, 18, 22, 10, 44, 38, 38, 24, 14, 12, 14]
+        return [10, 18, 22, 10, 44, 38, 38, 24, 14, 18, 12, 14]
     if title == VARIABLE_SHEET:
         return [18, 44, 12, 34]
     return [18, 70, 14, 34]

@@ -14,8 +14,8 @@ class ConfigLoaderTests(unittest.TestCase):
             wb = Workbook()
             ws = wb.active
             ws.title = "巡检接口"
-            ws.append(["是否启用", "场景名称", "接口名称", "请求方式", "URL", "请求头JSON", "请求参数", "成功判断", "轮询间隔秒", "超时时间ms", "通知组"])
-            ws.append(["是", "场景", "接口", "GET", "https://api.example.test/health", "{}", "无", "status=200", 12, 6789, "默认组"])
+            ws.append(["是否启用", "场景名称", "接口名称", "请求方式", "URL", "请求头JSON", "请求参数", "成功判断", "轮询间隔秒", "异常后轮询间隔秒", "超时时间ms", "通知组"])
+            ws.append(["是", "场景", "接口", "GET", "https://api.example.test/health", "{}", "无", "status=200", 12, 34, 6789, "默认组"])
             ws = wb.create_sheet("前置变量")
             ws.append(["变量名", "变量值", "是否敏感", "说明"])
             ws = wb.create_sheet("通知配置")
@@ -26,6 +26,7 @@ class ConfigLoaderTests(unittest.TestCase):
             config = load_config(path)
 
         self.assertEqual(config.checks[0].interval_seconds, 12)
+        self.assertEqual(config.checks[0].abnormal_interval_seconds, 34)
         self.assertEqual(config.checks[0].timeout_ms, 6789)
 
 

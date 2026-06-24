@@ -16,21 +16,30 @@ class PollingRunner:
         self.once = once
         self.notifier = WeComNotifier(config.notify_groups)
         self.states: dict[str, CheckState] = {}
-        self.next_run_at: dict[str, float] = {}
+        self.normal_next_run_at: dict[str, float] = {}
+        self.recovery_next_run_at: dict[str, float] = {}
 
     def run(self) -> None:
         logging.info("轮询巡检启动，接口数量：%s", len(self.config.checks))
         for item in self.config.checks:
-            self.next_run_at[item.key] = 0
+            self.normal_next_run_at[item.key] = 0
 
         while True:
             now = time.time()
             ran_any = False
             for item in self.config.checks:
-                if now < self.next_run_at.get(item.key, 0):
+                state = self.states.setdefault(item.key, CheckState())
+                normal_due = now >= self.normal_next_run_at.get(item.key, 0)
+                recovery_due = state.alerted and now >= self.recovery_next_run_at.get(item.key, float("inf"))
+                if not normal_due and not recovery_due:
                     continue
                 self._run_item(item)
-                self.next_run_at[item.key] = time.time() + item.interval_seconds
+                if normal_due:
+                    self.normal_next_run_at[item.key] = time.time() + item.interval_seconds
+                if self.states[item.key].alerted:
+                    self.recovery_next_run_at[item.key] = time.time() + item.abnormal_interval_seconds
+                else:
+                    self.recovery_next_run_at.pop(item.key, None)
                 ran_any = True
 
             if self.once:
@@ -84,6 +93,7 @@ class PollingRunner:
             state.alerted = True
 
     def _next_sleep_seconds(self) -> float:
-        if not self.next_run_at:
+        next_times = list(self.normal_next_run_at.values()) + list(self.recovery_next_run_at.values())
+        if not next_times:
             return 1
-        return min(self.next_run_at.values()) - time.time()
+        return min(next_times) - time.time()
