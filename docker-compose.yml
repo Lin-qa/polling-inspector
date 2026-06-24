@@ -2,10 +2,9 @@ services:
   polling-inspector:
     build: .
     container_name: polling-inspector
-    restart: unless-stopped
+    restart: always
     environment:
       TZ: Asia/Shanghai
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
-

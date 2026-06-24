@@ -140,11 +140,37 @@ python main.py init-config
 docker compose up -d --build
 ```
 
+`docker-compose.yml` 已配置：
+
+```yaml
+restart: always
+```
+
+如果容器已经存在，也可以直接启动：
+
+```bash
+docker start polling-inspector
+```
+
+如果需要给已存在容器补上开机自启策略：
+
+```bash
+docker update --restart=always polling-inspector
+```
+
 查看日志：
 
 ```bash
 docker compose logs -f
 ```
+
+日志同时会保存到宿主机：
+
+```bash
+logs/inspection.log
+```
+
+文件日志按天轮转，保留最近 7 天日志。
 
 停止：
 

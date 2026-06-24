@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import argparse
 import logging
+from logging.handlers import TimedRotatingFileHandler
 import sys
 from pathlib import Path
 
 from inspector.config_loader import create_template, load_config
 
 DEFAULT_CONFIG = Path("config/巡检配置.xlsx")
+LOG_BACKUP_DAYS = 7
 
 
 def main() -> None:
@@ -39,14 +41,24 @@ def main() -> None:
 
 def _setup_logging(log_file: Path) -> None:
     log_file.parent.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler(log_file, encoding="utf-8"),
-        ],
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+    stream_handler = logging.StreamHandler()
+    file_handler = TimedRotatingFileHandler(
+        log_file,
+        when="midnight",
+        interval=1,
+        backupCount=LOG_BACKUP_DAYS,
+        encoding="utf-8",
+        delay=True,
     )
+    for handler in [stream_handler, file_handler]:
+        handler.setFormatter(formatter)
+
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(stream_handler)
+    root_logger.addHandler(file_handler)
 
 
 if __name__ == "__main__":
