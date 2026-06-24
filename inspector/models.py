@@ -20,10 +20,6 @@ class CheckItem:
     headers: dict[str, str]
     params: str
     success_rule: str
-    response_ms_threshold: float | None
-    timeout_seconds: float
-    interval_seconds: float
-    failure_threshold: int
     notify_group: str
 
     @property
@@ -57,4 +53,3 @@ class InspectorConfig:
     variables: dict[str, str] = field(default_factory=dict)
     sensitive_variables: set[str] = field(default_factory=set)
     notify_groups: dict[str, NotifyGroup] = field(default_factory=dict)
-

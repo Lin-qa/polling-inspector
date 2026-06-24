@@ -34,10 +34,6 @@ def create_template(path: Path) -> None:
                 "请求头JSON",
                 "请求参数",
                 "成功判断",
-                "响应时间阈值ms",
-                "超时时间秒",
-                "轮询间隔秒",
-                "连续失败告警次数",
                 "通知组",
             ],
             [
@@ -50,10 +46,6 @@ def create_template(path: Path) -> None:
                     "{}",
                     "无",
                     "status=200",
-                    1000,
-                    5,
-                    60,
-                    3,
                     "默认组",
                 ],
                 [
@@ -65,10 +57,6 @@ def create_template(path: Path) -> None:
                     '{"Authorization":"Bearer ${token}","Content-Type":"application/json"}',
                     '{"bizId":"DEMO-001"}',
                     "status=200; code=0",
-                    1500,
-                    5,
-                    60,
-                    3,
                     "默认组",
                 ],
             ],
@@ -146,10 +134,6 @@ def _load_checks(sheet) -> list[CheckItem]:
                 headers=_parse_json_object(_value(row, header_index, "请求头JSON"), "请求头JSON"),
                 params=str(_value(row, header_index, "请求参数") or "").strip(),
                 success_rule=str(_value(row, header_index, "成功判断") or "").strip(),
-                response_ms_threshold=_float_or_none(_value(row, header_index, "响应时间阈值ms")),
-                timeout_seconds=_float_or_default(_value(row, header_index, "超时时间秒"), 5),
-                interval_seconds=_float_or_default(_value(row, header_index, "轮询间隔秒"), 60),
-                failure_threshold=max(1, int(_float_or_default(_value(row, header_index, "连续失败告警次数"), 3))),
                 notify_group=str(_value(row, header_index, "通知组") or "默认组").strip(),
             )
         )
@@ -239,8 +223,7 @@ def _float_or_none(value: Any) -> float | None:
 
 def _widths_for_sheet(title: str) -> list[int]:
     if title == CHECK_SHEET:
-        return [10, 18, 22, 10, 44, 38, 38, 24, 16, 12, 12, 18, 14]
+        return [10, 18, 22, 10, 44, 38, 38, 24, 14]
     if title == VARIABLE_SHEET:
         return [18, 44, 12, 34]
     return [18, 70, 14, 34]
-

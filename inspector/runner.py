@@ -7,6 +7,9 @@ from inspector.http_client import run_check
 from inspector.models import CheckItem, CheckState, InspectorConfig
 from inspector.notifier import WeComNotifier
 
+CHECK_INTERVAL_SECONDS = 60 * 60
+MAX_ATTEMPTS_PER_CHECK = 3
+
 
 class PollingRunner:
     def __init__(self, config: InspectorConfig, once: bool = False) -> None:
@@ -28,7 +31,7 @@ class PollingRunner:
                 if now < self.next_run_at.get(item.key, 0):
                     continue
                 self._run_item(item)
-                self.next_run_at[item.key] = time.time() + item.interval_seconds
+                self.next_run_at[item.key] = time.time() + CHECK_INTERVAL_SECONDS
                 ran_any = True
 
             if self.once:
@@ -39,8 +42,26 @@ class PollingRunner:
                 time.sleep(min(max(sleep_seconds, 0.5), 5))
 
     def _run_item(self, item: CheckItem) -> None:
-        result = run_check(item, self.config.variables)
         state = self.states.setdefault(item.key, CheckState())
+        result = None
+
+        for attempt in range(1, MAX_ATTEMPTS_PER_CHECK + 1):
+            result = run_check(item, self.config.variables)
+            if result.ok:
+                break
+            logging.warning(
+                "巡检失败 | %s | %s | 第%s/%s次 | %s",
+                item.scenario_name,
+                item.api_name,
+                attempt,
+                MAX_ATTEMPTS_PER_CHECK,
+                result.reason,
+            )
+            if attempt < MAX_ATTEMPTS_PER_CHECK:
+                time.sleep(1)
+
+        if result is None:
+            return
 
         if result.ok:
             logging.info(
@@ -57,16 +78,9 @@ class PollingRunner:
             state.last_reason = ""
             return
 
-        state.consecutive_failures += 1
+        state.consecutive_failures = MAX_ATTEMPTS_PER_CHECK
         state.last_reason = result.reason
-        logging.warning(
-            "巡检失败 | %s | %s | 连续失败%s次 | %s",
-            item.scenario_name,
-            item.api_name,
-            state.consecutive_failures,
-            result.reason,
-        )
-        if state.consecutive_failures >= item.failure_threshold and not state.alerted:
+        if not state.alerted:
             self.notifier.notify_failure(result, state.consecutive_failures)
             state.alerted = True
 
@@ -74,4 +88,3 @@ class PollingRunner:
         if not self.next_run_at:
             return 1
         return min(self.next_run_at.values()) - time.time()
-

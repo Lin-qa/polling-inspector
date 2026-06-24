@@ -11,6 +11,8 @@ from inspector.sanitizer import sanitize_text, sanitize_url
 from inspector.variables import apply_variables, unresolved_variables
 
 EMPTY_PARAMS = {"", "无", "空", "EMPTY", "__EMPTY__"}
+REQUEST_TIMEOUT_SECONDS = 5
+SLOW_RESPONSE_THRESHOLD_MS = REQUEST_TIMEOUT_SECONDS * 1000
 
 
 def run_check(item: CheckItem, variables: dict[str, str]) -> CheckResult:
@@ -37,14 +39,14 @@ def run_check(item: CheckItem, variables: dict[str, str]) -> CheckResult:
     try:
         request_url, payload, request_headers = _prepare_request(item.method, url, params, headers)
         req = request.Request(request_url, data=payload, headers=request_headers, method=item.method)
-        with request.urlopen(req, timeout=item.timeout_seconds) as response:
+        with request.urlopen(req, timeout=REQUEST_TIMEOUT_SECONDS) as response:
             body = response.read()
             status = response.status
         elapsed_ms = (time.perf_counter() - start) * 1000
         ok, reason = assert_success(body, status, elapsed_ms, item.success_rule)
-        if ok and item.response_ms_threshold and elapsed_ms > item.response_ms_threshold:
+        if ok and elapsed_ms > SLOW_RESPONSE_THRESHOLD_MS:
             ok = False
-            reason = f"响应时间超阈值：{elapsed_ms:.1f}ms > {item.response_ms_threshold:.1f}ms"
+            reason = f"请求时间超过5秒：{elapsed_ms:.1f}ms"
         return CheckResult(
             item=item,
             ok=ok,
