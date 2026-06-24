@@ -53,6 +53,10 @@ class WeComNotifier:
             logging.warning("通知组未配置 webhook，跳过通知：%s", group_name)
             logging.info("通知内容：\n%s", content)
             return
+        if "REPLACE_WITH_YOUR_KEY" in group.webhook_url or "替换" in group.webhook_url:
+            logging.warning("通知组 webhook 仍是占位符，跳过通知：%s", group_name)
+            logging.info("通知内容：\n%s", content)
+            return
 
         payload = {
             "msgtype": "text",
@@ -74,5 +78,5 @@ class WeComNotifier:
             with request.urlopen(req, timeout=5) as response:
                 response.read()
             logging.info("企业微信通知已发送：%s", group_name)
-        except (error.URLError, TimeoutError, OSError) as exc:
+        except Exception as exc:
             logging.error("企业微信通知发送失败：%s", exc)

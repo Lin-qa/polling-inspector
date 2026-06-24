@@ -72,7 +72,7 @@ def create_template(path: Path) -> None:
             NOTIFY_SHEET,
             ["通知组", "企业微信Webhook", "是否@所有人", "备注"],
             [
-                ["默认组", "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=替换成你的key", "否", "企业微信群机器人 webhook"],
+                ["默认组", "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=REPLACE_WITH_YOUR_KEY", "否", "企业微信群机器人 webhook"],
             ],
         ),
     ]

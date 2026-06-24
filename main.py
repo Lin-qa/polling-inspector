@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
 from pathlib import Path
 
 from inspector.config_loader import create_template, load_config
@@ -11,7 +12,7 @@ DEFAULT_CONFIG = Path("config/巡检配置.xlsx")
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="接口轮询巡检工具")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(dest="command")
 
     init_parser = subparsers.add_parser("init-config", help="生成巡检配置模板")
     init_parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="配置文件路径")
@@ -21,7 +22,7 @@ def main() -> None:
     run_parser.add_argument("--once", action="store_true", help="只执行一轮，用于验证配置")
     run_parser.add_argument("--log-file", default="logs/inspection.log", help="日志文件路径")
 
-    args = parser.parse_args()
+    args = parser.parse_args(sys.argv[1:] or ["run"])
 
     if args.command == "init-config":
         create_template(Path(args.config))

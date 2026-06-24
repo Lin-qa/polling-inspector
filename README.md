@@ -112,6 +112,12 @@ python main.py run --once
 python main.py run
 ```
 
+如果在 PyCharm 里直接运行 `main.py`，不填写任何参数，默认等同于：
+
+```bash
+python main.py run
+```
+
 ## Docker 部署
 
 先在本地生成配置：
