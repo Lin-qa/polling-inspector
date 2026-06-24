@@ -34,6 +34,8 @@ def create_template(path: Path) -> None:
                 "请求头JSON",
                 "请求参数",
                 "成功判断",
+                "轮询间隔ms",
+                "超时时间ms",
                 "通知组",
             ],
             [
@@ -46,6 +48,8 @@ def create_template(path: Path) -> None:
                     "{}",
                     "无",
                     "status=200",
+                    3600000,
+                    5000,
                     "默认组",
                 ],
                 [
@@ -57,6 +61,8 @@ def create_template(path: Path) -> None:
                     '{"Authorization":"Bearer ${token}","Content-Type":"application/json"}',
                     '{"bizId":"DEMO-001"}',
                     "status=200; code=0",
+                    3600000,
+                    5000,
                     "默认组",
                 ],
             ],
@@ -134,6 +140,8 @@ def _load_checks(sheet) -> list[CheckItem]:
                 headers=_parse_json_object(_value(row, header_index, "请求头JSON"), "请求头JSON"),
                 params=str(_value(row, header_index, "请求参数") or "").strip(),
                 success_rule=str(_value(row, header_index, "成功判断") or "").strip(),
+                interval_ms=_int_or_default(_value_any(row, header_index, ["轮询间隔ms", "轮询间隔毫秒"]), _legacy_seconds_to_ms(_value(row, header_index, "轮询间隔秒"), 3600000)),
+                timeout_ms=_int_or_default(_value_any(row, header_index, ["超时时间ms", "超时时间毫秒"]), _legacy_seconds_to_ms(_value(row, header_index, "超时时间秒"), 5000)),
                 notify_group=str(_value(row, header_index, "通知组") or "默认组").strip(),
             )
         )
@@ -200,6 +208,14 @@ def _value(row: tuple, header_index: dict[str, int], header: str):
     return row[index]
 
 
+def _value_any(row: tuple, header_index: dict[str, int], headers: list[str]):
+    for header in headers:
+        value = _value(row, header_index, header)
+        if value not in (None, ""):
+            return value
+    return None
+
+
 def _enabled(value: Any, default: bool) -> bool:
     text = str(value or "").strip()
     if not text:
@@ -221,9 +237,27 @@ def _float_or_none(value: Any) -> float | None:
         return None
 
 
+def _int_or_default(value: Any, default: int) -> int:
+    if value in (None, ""):
+        return default
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _legacy_seconds_to_ms(value: Any, default_ms: int) -> int:
+    if value in (None, ""):
+        return default_ms
+    try:
+        return int(float(value) * 1000)
+    except (TypeError, ValueError):
+        return default_ms
+
+
 def _widths_for_sheet(title: str) -> list[int]:
     if title == CHECK_SHEET:
-        return [10, 18, 22, 10, 44, 38, 38, 24, 14]
+        return [10, 18, 22, 10, 44, 38, 38, 24, 14, 12, 14]
     if title == VARIABLE_SHEET:
         return [18, 44, 12, 34]
     return [18, 70, 14, 34]

@@ -20,6 +20,8 @@ class CheckItem:
     headers: dict[str, str]
     params: str
     success_rule: str
+    interval_ms: int
+    timeout_ms: int
     notify_group: str
 
     @property

@@ -7,7 +7,6 @@ from inspector.http_client import run_check
 from inspector.models import CheckItem, CheckState, InspectorConfig
 from inspector.notifier import WeComNotifier
 
-CHECK_INTERVAL_SECONDS = 60 * 60
 MAX_ATTEMPTS_PER_CHECK = 3
 
 
@@ -31,7 +30,7 @@ class PollingRunner:
                 if now < self.next_run_at.get(item.key, 0):
                     continue
                 self._run_item(item)
-                self.next_run_at[item.key] = time.time() + CHECK_INTERVAL_SECONDS
+                self.next_run_at[item.key] = time.time() + item.interval_ms / 1000
                 ran_any = True
 
             if self.once:
