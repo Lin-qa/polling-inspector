@@ -183,6 +183,11 @@ logs/inspection.log
 所以宿主机上的任意配置文件，都映射到这个容器路径即可：
 
 ```bash
+CONFIG_FILE="$(pwd)/config/巡检配置.xlsx"
+LOG_DIR="$(pwd)/logs"
+
+mkdir -p "$LOG_DIR"
+
 docker build -t polling-inspector:latest .
 
 docker rm -f polling-inspector 2>/dev/null || true
@@ -191,8 +196,8 @@ docker run -d \
   --name polling-inspector \
   --restart=always \
   -e TZ=Asia/Shanghai \
-  -v /Users/lihanlin/workspace/polling-inspector/config/巡检配置.xlsx:/app/config/巡检配置.xlsx:ro \
-  -v /Users/lihanlin/workspace/polling-inspector/logs:/app/logs \
+  -v "$CONFIG_FILE:/app/config/巡检配置.xlsx:ro" \
+  -v "$LOG_DIR:/app/logs" \
   polling-inspector:latest
 ```
 
@@ -205,14 +210,19 @@ docker restart polling-inspector
 如果要更换成另一个 xlsx 文件路径，需要重新创建容器，把新的文件路径映射进去：
 
 ```bash
+CONFIG_FILE="/path/to/your/巡检配置.xlsx"
+LOG_DIR="$(pwd)/logs"
+
+mkdir -p "$LOG_DIR"
+
 docker rm -f polling-inspector
 
 docker run -d \
   --name polling-inspector \
   --restart=always \
   -e TZ=Asia/Shanghai \
-  -v /你的新配置路径/巡检配置.xlsx:/app/config/巡检配置.xlsx:ro \
-  -v /Users/lihanlin/workspace/polling-inspector/logs:/app/logs \
+  -v "$CONFIG_FILE:/app/config/巡检配置.xlsx:ro" \
+  -v "$LOG_DIR:/app/logs" \
   polling-inspector:latest
 ```
 
