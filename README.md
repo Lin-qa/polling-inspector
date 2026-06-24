@@ -35,6 +35,14 @@
 config/巡检配置.xlsx
 ```
 
+仓库内提供脱敏示例模板：
+
+```bash
+config/巡检配置_示例.xlsx
+```
+
+实际使用时可以复制一份并改名为 `config/巡检配置.xlsx`，再填写真实接口和企业微信 webhook。真实配置文件不会提交到 git。
+
 生成模板：
 
 ```bash
@@ -170,4 +178,3 @@ docker compose down
 ```bash
 python -m unittest
 ```
-

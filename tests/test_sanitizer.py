@@ -11,7 +11,7 @@ class SanitizerTests(unittest.TestCase):
         )
 
     def test_mask_json_secret(self):
-        token_value = "abcdef" + "123456"
+        token_value = "demo" + "token" + "value"
         text = sanitize_text('{"token":"' + token_value + '","name":"demo"}')
         self.assertIn('"token": "***"', text)
         self.assertIn('"name": "demo"', text)

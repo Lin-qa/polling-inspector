@@ -4,8 +4,9 @@ __pycache__/
 venv/
 .env
 logs/
-config/
 *.xlsx
 *.xls
+config/*
+!config/
+!config/巡检配置_示例.xlsx
 .DS_Store
-
