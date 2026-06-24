@@ -1,0 +1,10 @@
+.git
+.DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+logs/
+config/*
+!config/巡检配置_示例.xlsx

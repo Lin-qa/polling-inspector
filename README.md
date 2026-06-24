@@ -172,6 +172,50 @@ logs/inspection.log
 
 文件日志按天轮转，保留最近 7 天日志。
 
+### 使用 docker 命令映射指定 xlsx
+
+如果不用 `docker compose`，也可以直接用 `docker run` 映射某一个 xlsx 文件。容器内固定读取：
+
+```bash
+/app/config/巡检配置.xlsx
+```
+
+所以宿主机上的任意配置文件，都映射到这个容器路径即可：
+
+```bash
+docker build -t polling-inspector:latest .
+
+docker rm -f polling-inspector 2>/dev/null || true
+
+docker run -d \
+  --name polling-inspector \
+  --restart=always \
+  -e TZ=Asia/Shanghai \
+  -v /Users/lihanlin/workspace/polling-inspector/config/巡检配置.xlsx:/app/config/巡检配置.xlsx:ro \
+  -v /Users/lihanlin/workspace/polling-inspector/logs:/app/logs \
+  polling-inspector:latest
+```
+
+如果只是修改了同一个 xlsx 文件里的内容，保存后重启容器即可：
+
+```bash
+docker restart polling-inspector
+```
+
+如果要更换成另一个 xlsx 文件路径，需要重新创建容器，把新的文件路径映射进去：
+
+```bash
+docker rm -f polling-inspector
+
+docker run -d \
+  --name polling-inspector \
+  --restart=always \
+  -e TZ=Asia/Shanghai \
+  -v /你的新配置路径/巡检配置.xlsx:/app/config/巡检配置.xlsx:ro \
+  -v /Users/lihanlin/workspace/polling-inspector/logs:/app/logs \
+  polling-inspector:latest
+```
+
 停止：
 
 ```bash
