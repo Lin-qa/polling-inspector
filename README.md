@@ -16,6 +16,7 @@
 - 同一轮 3 次都失败后，发送企业微信群通知
 - 已告警接口恢复成功后，发送恢复通知
 - 程序启动后发送一次启动通知
+- 单次执行完成后发送一条执行报告到企业微信
 - 每天 18:00 发送前一天 18:00 至当天 18:00 的巡检日报
 - 通知内容自动脱敏 token、ticket、cookie、手机号、身份证、长密钥等信息
 - 支持 Docker 部署
@@ -111,10 +112,22 @@ pip install -r requirements.txt
 python main.py init-config
 ```
 
-只执行一轮，用于验证配置：
+只执行一轮，用于验证配置，执行完成后会向所有已配置通知组发送单次执行报告：
 
 ```bash
 python main.py run --once
+```
+
+代码里也保留了单次执行入口，便于后续脚本直接调用：
+
+```python
+from pathlib import Path
+from inspector.config_loader import load_config
+from inspector.runner import run_once_inspection
+from inspector.stats import StatsRecorder
+
+config = load_config(Path("config/巡检配置.xlsx"))
+report = run_once_inspection(config, StatsRecorder(Path("logs/inspection_stats.jsonl")))
 ```
 
 常驻轮询：
@@ -280,6 +293,18 @@ docker compose down
 - 启动接口数
 - 日报发送时间
 - 日报统计周期
+
+单次执行报告包含：
+
+- 开始时间
+- 结束时间
+- 巡检接口数
+- 成功接口数
+- 失败接口数
+- 成功率
+- 平均响应时间
+- 最大响应时间
+- 失败明细
 
 日报通知包含：
 

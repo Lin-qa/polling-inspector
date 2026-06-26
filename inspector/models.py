@@ -80,3 +80,15 @@ class DailySummary:
     avg_elapsed_ms: float
     max_elapsed_ms: float
     api_summaries: list[ApiSummary] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class OnceRunReport:
+    started_at: datetime
+    finished_at: datetime
+    total: int
+    success: int
+    failure: int
+    avg_elapsed_ms: float
+    max_elapsed_ms: float
+    results: list[CheckResult] = field(default_factory=list)

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from inspector.http_client import run_check
-from inspector.models import CheckItem, CheckState, InspectorConfig
+from inspector.models import CheckItem, CheckResult, CheckState, InspectorConfig, OnceRunReport
 from inspector.notifier import WeComNotifier
 from inspector.stats import StatsRecorder
 
@@ -29,9 +29,11 @@ class PollingRunner:
 
     def run(self) -> None:
         logging.info("轮询巡检启动，接口数量：%s", len(self.config.checks))
-        if not self.once:
-            self._notify_startup_once()
-            self.next_summary_at = _next_summary_timestamp(time.time())
+        if self.once:
+            self.run_once()
+            return
+        self._notify_startup_once()
+        self.next_summary_at = _next_summary_timestamp(time.time())
         for item in self.config.checks:
             self.normal_next_run_at[item.key] = 0
 
@@ -55,14 +57,14 @@ class PollingRunner:
                     self.recovery_next_run_at.pop(item.key, None)
                 ran_any = True
 
-            if self.once:
-                return
-
             if not ran_any:
                 sleep_seconds = self._next_sleep_seconds()
                 time.sleep(min(max(sleep_seconds, 0.5), 5))
 
-    def _run_item(self, item: CheckItem) -> None:
+    def run_once(self) -> OnceRunReport:
+        return run_once_inspection(self.config, self.stats_recorder, self.notifier)
+
+    def _run_item(self, item: CheckItem, notify_failure: bool = True) -> CheckResult | None:
         state = self.states.setdefault(item.key, CheckState())
         result = None
 
@@ -82,7 +84,7 @@ class PollingRunner:
                 time.sleep(1)
 
         if result is None:
-            return
+            return None
 
         self.stats_recorder.record(result)
         if result.ok:
@@ -98,13 +100,14 @@ class PollingRunner:
             state.consecutive_failures = 0
             state.alerted = False
             state.last_reason = ""
-            return
+            return result
 
         state.consecutive_failures = MAX_ATTEMPTS_PER_CHECK
         state.last_reason = result.reason
-        if not state.alerted:
+        if notify_failure and not state.alerted:
             self.notifier.notify_failure(result, state.consecutive_failures)
             state.alerted = True
+        return result
 
     def _notify_startup_once(self) -> None:
         if self._startup_notified:
@@ -138,3 +141,40 @@ def _next_summary_timestamp(timestamp: float) -> float:
     if current >= summary_time:
         summary_time += timedelta(days=1)
     return summary_time.timestamp()
+
+
+def run_once_inspection(
+    config: InspectorConfig,
+    stats_recorder: StatsRecorder | None = None,
+    notifier: WeComNotifier | None = None,
+) -> OnceRunReport:
+    started_at = datetime.now()
+    recorder = stats_recorder or StatsRecorder(Path("logs/inspection_stats.jsonl"))
+    report_notifier = notifier or WeComNotifier(config.notify_groups)
+    runner = PollingRunner(config=config, once=True)
+    runner.stats_recorder = recorder
+    runner.notifier = report_notifier
+
+    results = []
+    for item in config.checks:
+        result = runner._run_item(item, notify_failure=False)
+        if result is not None:
+            results.append(result)
+
+    finished_at = datetime.now()
+    total = len(results)
+    success = sum(1 for result in results if result.ok)
+    failure = total - success
+    elapsed_values = [result.elapsed_ms for result in results]
+    report = OnceRunReport(
+        started_at=started_at,
+        finished_at=finished_at,
+        total=total,
+        success=success,
+        failure=failure,
+        avg_elapsed_ms=sum(elapsed_values) / total if total else 0,
+        max_elapsed_ms=max(elapsed_values) if elapsed_values else 0,
+        results=results,
+    )
+    report_notifier.notify_once_report(report)
+    return report

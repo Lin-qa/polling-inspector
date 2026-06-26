@@ -21,7 +21,7 @@ def main() -> None:
 
     run_parser = subparsers.add_parser("run", help="启动轮询巡检")
     run_parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="配置文件路径")
-    run_parser.add_argument("--once", action="store_true", help="只执行一轮，用于验证配置")
+    run_parser.add_argument("--once", action="store_true", help="只执行一轮，并发送单次执行报告")
     run_parser.add_argument("--log-file", default="logs/inspection.log", help="日志文件路径")
     run_parser.add_argument("--stats-file", default="", help="统计文件路径，默认和日志文件放在同一目录")
 

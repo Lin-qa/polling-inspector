@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from inspector.models import CheckItem, CheckResult, CheckState, DailySummary, InspectorConfig
-from inspector.runner import PollingRunner, _next_summary_timestamp
+from inspector.runner import PollingRunner, _next_summary_timestamp, run_once_inspection
 
 
 def make_item() -> CheckItem:
@@ -30,6 +30,8 @@ class FakeNotifier:
         self.recovery_count = 0
         self.summary_count = 0
         self.summary = None
+        self.once_report_count = 0
+        self.once_report = None
 
     def notify_startup(self, checks):
         self.startup_count += 1
@@ -43,6 +45,10 @@ class FakeNotifier:
     def notify_daily_summary(self, summary):
         self.summary_count += 1
         self.summary = summary
+
+    def notify_once_report(self, report):
+        self.once_report_count += 1
+        self.once_report = report
 
 
 class FakeStatsRecorder:
@@ -73,40 +79,36 @@ class FakeStatsRecorder:
 
 
 class RunnerScheduleTests(unittest.TestCase):
-    def test_failure_schedules_recovery_without_replacing_normal_schedule(self):
+    def test_run_item_failure_records_and_notifies_when_enabled(self):
         item = make_item()
-        runner = PollingRunner(InspectorConfig(checks=[item]), once=True)
+        runner = PollingRunner(InspectorConfig(checks=[item]), once=False)
         notifier = FakeNotifier()
         runner.notifier = notifier
         runner.stats_recorder = FakeStatsRecorder()
         result = CheckResult(item=item, ok=False, http_status="ERR", elapsed_ms=1, checked_at="now", reason="fail")
 
-        with patch("inspector.runner.run_check", return_value=result), patch("inspector.runner.time.time", return_value=1000), patch("inspector.runner.time.sleep"):
-            runner.run()
+        with patch("inspector.runner.run_check", return_value=result), patch("inspector.runner.time.sleep"):
+            returned = runner._run_item(item)
 
-        self.assertEqual(runner.normal_next_run_at[item.key], 4600)
-        self.assertEqual(runner.recovery_next_run_at[item.key], 1600)
+        self.assertIs(returned, result)
         self.assertTrue(runner.states[item.key].alerted)
         self.assertEqual(notifier.failure_count, 1)
         self.assertEqual(notifier.startup_count, 0)
         self.assertEqual(len(runner.stats_recorder.results), 1)
 
-    def test_recovery_check_does_not_move_normal_schedule(self):
+    def test_run_item_recovery_notifies_and_clears_state(self):
         item = make_item()
-        runner = PollingRunner(InspectorConfig(checks=[item]), once=True)
+        runner = PollingRunner(InspectorConfig(checks=[item]), once=False)
         notifier = FakeNotifier()
         runner.notifier = notifier
         runner.stats_recorder = FakeStatsRecorder()
-        runner.normal_next_run_at[item.key] = 4600
-        runner.recovery_next_run_at[item.key] = 1000
         runner.states[item.key] = CheckState(consecutive_failures=3, alerted=True)
         result = CheckResult(item=item, ok=True, http_status=200, elapsed_ms=1, checked_at="now")
 
-        with patch("inspector.runner.run_check", return_value=result), patch("inspector.runner.time.time", return_value=1000), patch("inspector.runner.time.sleep"):
-            runner.run()
+        with patch("inspector.runner.run_check", return_value=result), patch("inspector.runner.time.sleep"):
+            returned = runner._run_item(item)
 
-        self.assertEqual(runner.normal_next_run_at[item.key], 4600)
-        self.assertNotIn(item.key, runner.recovery_next_run_at)
+        self.assertIs(returned, result)
         self.assertFalse(runner.states[item.key].alerted)
         self.assertEqual(notifier.recovery_count, 1)
 
@@ -139,6 +141,24 @@ class RunnerScheduleTests(unittest.TestCase):
             datetime.fromtimestamp(_next_summary_timestamp(after_summary.timestamp())),
             datetime(2026, 6, 27, 18, 0, 0),
         )
+
+    def test_once_inspection_sends_one_report_without_failure_alert(self):
+        item = make_item()
+        config = InspectorConfig(checks=[item])
+        notifier = FakeNotifier()
+        stats_recorder = FakeStatsRecorder()
+        result = CheckResult(item=item, ok=False, http_status="ERR", elapsed_ms=123, checked_at="now", reason="fail")
+
+        with patch("inspector.runner.run_check", return_value=result), patch("inspector.runner.time.sleep"):
+            report = run_once_inspection(config, stats_recorder, notifier)
+
+        self.assertEqual(report.total, 1)
+        self.assertEqual(report.success, 0)
+        self.assertEqual(report.failure, 1)
+        self.assertEqual(report.avg_elapsed_ms, 123)
+        self.assertEqual(notifier.once_report_count, 1)
+        self.assertEqual(notifier.failure_count, 0)
+        self.assertEqual(len(stats_recorder.results), 1)
 
     def test_startup_notification_only_for_loop_mode(self):
         item = make_item()

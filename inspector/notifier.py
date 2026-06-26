@@ -4,7 +4,7 @@ import logging
 import json
 from urllib import error, request
 
-from inspector.models import CheckItem, CheckResult, DailySummary, NotifyGroup
+from inspector.models import CheckItem, CheckResult, DailySummary, NotifyGroup, OnceRunReport
 from inspector.sanitizer import sanitize_text
 
 
@@ -45,6 +45,32 @@ class WeComNotifier:
                 )
         else:
             lines.append("失败接口：无")
+        self._send_all("\n".join(lines))
+
+    def notify_once_report(self, report: OnceRunReport) -> None:
+        success_rate = (report.success / report.total * 100) if report.total else 0
+        lines = [
+            "【接口巡检单次执行报告】",
+            f"开始时间：{report.started_at:%Y-%m-%d %H:%M:%S}",
+            f"结束时间：{report.finished_at:%Y-%m-%d %H:%M:%S}",
+            f"巡检接口数：{report.total}",
+            f"成功接口数：{report.success}",
+            f"失败接口数：{report.failure}",
+            f"成功率：{success_rate:.2f}%",
+            f"平均响应时间：{report.avg_elapsed_ms:.1f}ms",
+            f"最大响应时间：{report.max_elapsed_ms:.1f}ms",
+        ]
+        failed_results = [result for result in report.results if not result.ok]
+        if failed_results:
+            lines.append("失败明细：")
+            for result in failed_results[:10]:
+                item = result.item
+                lines.append(
+                    f"- {item.scenario_name}/{item.api_name}：HTTP {result.http_status}，"
+                    f"{result.elapsed_ms:.1f}ms，{sanitize_text(result.reason) or '成功判断不通过'}"
+                )
+        else:
+            lines.append("失败明细：无")
         self._send_all("\n".join(lines))
 
     def notify_failure(self, result: CheckResult, failure_count: int) -> None:
