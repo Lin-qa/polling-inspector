@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 
 @dataclass(frozen=True)
@@ -56,3 +57,26 @@ class InspectorConfig:
     variables: dict[str, str] = field(default_factory=dict)
     sensitive_variables: set[str] = field(default_factory=set)
     notify_groups: dict[str, NotifyGroup] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ApiSummary:
+    scenario_name: str
+    api_name: str
+    total: int
+    success: int
+    failure: int
+    avg_elapsed_ms: float
+    max_elapsed_ms: float
+
+
+@dataclass(frozen=True)
+class DailySummary:
+    window_start: datetime
+    window_end: datetime
+    total: int
+    success: int
+    failure: int
+    avg_elapsed_ms: float
+    max_elapsed_ms: float
+    api_summaries: list[ApiSummary] = field(default_factory=list)

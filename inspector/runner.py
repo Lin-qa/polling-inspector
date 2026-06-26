@@ -2,30 +2,43 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime, timedelta
+from pathlib import Path
 
 from inspector.http_client import run_check
 from inspector.models import CheckItem, CheckState, InspectorConfig
 from inspector.notifier import WeComNotifier
+from inspector.stats import StatsRecorder
 
 MAX_ATTEMPTS_PER_CHECK = 3
+SUMMARY_HOUR = 18
+STATS_RETENTION_DAYS = 8
 
 
 class PollingRunner:
-    def __init__(self, config: InspectorConfig, once: bool = False) -> None:
+    def __init__(self, config: InspectorConfig, once: bool = False, stats_file: Path | None = None) -> None:
         self.config = config
         self.once = once
         self.notifier = WeComNotifier(config.notify_groups)
+        self.stats_recorder = StatsRecorder(stats_file or Path("logs/inspection_stats.jsonl"))
         self.states: dict[str, CheckState] = {}
         self.normal_next_run_at: dict[str, float] = {}
         self.recovery_next_run_at: dict[str, float] = {}
+        self.next_summary_at: float | None = None
+        self._startup_notified = False
 
     def run(self) -> None:
         logging.info("轮询巡检启动，接口数量：%s", len(self.config.checks))
+        if not self.once:
+            self._notify_startup_once()
+            self.next_summary_at = _next_summary_timestamp(time.time())
         for item in self.config.checks:
             self.normal_next_run_at[item.key] = 0
 
         while True:
             now = time.time()
+            if not self.once:
+                self._send_due_summaries(now)
             ran_any = False
             for item in self.config.checks:
                 state = self.states.setdefault(item.key, CheckState())
@@ -71,6 +84,7 @@ class PollingRunner:
         if result is None:
             return
 
+        self.stats_recorder.record(result)
         if result.ok:
             logging.info(
                 "巡检成功 | %s | %s | %.1fms | HTTP %s",
@@ -92,8 +106,35 @@ class PollingRunner:
             self.notifier.notify_failure(result, state.consecutive_failures)
             state.alerted = True
 
+    def _notify_startup_once(self) -> None:
+        if self._startup_notified:
+            return
+        self.notifier.notify_startup(self.config.checks)
+        self._startup_notified = True
+
+    def _send_due_summaries(self, now: float) -> None:
+        if self.next_summary_at is None:
+            return
+        while now >= self.next_summary_at:
+            window_end = datetime.fromtimestamp(self.next_summary_at)
+            window_start = window_end - timedelta(days=1)
+            summary = self.stats_recorder.summarize(window_start, window_end)
+            self.notifier.notify_daily_summary(summary)
+            self.stats_recorder.prune_before(window_end - timedelta(days=STATS_RETENTION_DAYS))
+            self.next_summary_at = _next_summary_timestamp(self.next_summary_at + 1)
+
     def _next_sleep_seconds(self) -> float:
         next_times = list(self.normal_next_run_at.values()) + list(self.recovery_next_run_at.values())
+        if self.next_summary_at is not None:
+            next_times.append(self.next_summary_at)
         if not next_times:
             return 1
         return min(next_times) - time.time()
+
+
+def _next_summary_timestamp(timestamp: float) -> float:
+    current = datetime.fromtimestamp(timestamp)
+    summary_time = current.replace(hour=SUMMARY_HOUR, minute=0, second=0, microsecond=0)
+    if current >= summary_time:
+        summary_time += timedelta(days=1)
+    return summary_time.timestamp()

@@ -23,6 +23,7 @@ def main() -> None:
     run_parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="配置文件路径")
     run_parser.add_argument("--once", action="store_true", help="只执行一轮，用于验证配置")
     run_parser.add_argument("--log-file", default="logs/inspection.log", help="日志文件路径")
+    run_parser.add_argument("--stats-file", default="", help="统计文件路径，默认和日志文件放在同一目录")
 
     args = parser.parse_args(sys.argv[1:] or ["run"])
 
@@ -31,11 +32,13 @@ def main() -> None:
         print(f"已生成配置模板：{args.config}")
         return
 
-    _setup_logging(Path(args.log_file))
+    log_file = Path(args.log_file)
+    stats_file = Path(args.stats_file) if args.stats_file else log_file.with_name("inspection_stats.jsonl")
+    _setup_logging(log_file)
     config = load_config(Path(args.config))
     from inspector.runner import PollingRunner
 
-    runner = PollingRunner(config=config, once=args.once)
+    runner = PollingRunner(config=config, once=args.once, stats_file=stats_file)
     runner.run()
 
 
