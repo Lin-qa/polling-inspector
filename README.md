@@ -118,6 +118,25 @@ python main.py init-config
 python main.py run --once
 ```
 
+如果习惯在 PyCharm 里直接运行脚本，可以右键运行：
+
+```bash
+run_once.py
+```
+
+默认读取：
+
+```bash
+config/巡检配置.xlsx
+```
+
+默认写入：
+
+```bash
+logs/inspection.log
+logs/inspection_stats.jsonl
+```
+
 代码里也保留了单次执行入口，便于后续脚本直接调用：
 
 ```python
