@@ -9,6 +9,8 @@ class NotifyGroup:
     name: str
     webhook_url: str
     mention_all: bool = False
+    webhook_type: str = ""
+    secret: str = ""
 
 
 @dataclass(frozen=True)

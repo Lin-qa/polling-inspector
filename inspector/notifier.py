@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import logging
 import json
+import time
 from urllib import error, request
 
 from inspector.models import CheckItem, CheckResult, DailySummary, NotifyGroup, OnceRunReport
@@ -127,14 +131,12 @@ class WeComNotifier:
             logging.info("通知内容：\n%s", content)
             return
 
-        payload = {
-            "msgtype": "text",
-            "text": {
-                "content": content,
-            },
-        }
-        if group.mention_all:
-            payload["text"]["mentioned_list"] = ["@all"]
+        if _is_feishu_group(group):
+            payload = _build_feishu_payload(group, content)
+            platform = "飞书"
+        else:
+            payload = _build_wecom_payload(group, content)
+            platform = "企业微信"
 
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         req = request.Request(
@@ -145,7 +147,50 @@ class WeComNotifier:
         )
         try:
             with request.urlopen(req, timeout=5) as response:
-                response.read()
-            logging.info("企业微信通知已发送：%s", group_name)
+                response_body = response.read().decode("utf-8", errors="replace")
+            logging.info("%s通知已发送：%s，响应：%s", platform, group_name, response_body)
         except Exception as exc:
-            logging.error("企业微信通知发送失败：%s", exc)
+            logging.error("%s通知发送失败：%s", platform, exc)
+
+
+def _is_feishu_group(group: NotifyGroup) -> bool:
+    webhook_type = group.webhook_type.strip().lower()
+    return webhook_type in {"飞书", "feishu", "lark"} or "open.feishu.cn/open-apis/bot/" in group.webhook_url
+
+
+def _build_wecom_payload(group: NotifyGroup, content: str) -> dict:
+    payload = {
+        "msgtype": "text",
+        "text": {
+            "content": content,
+        },
+    }
+    if group.mention_all:
+        payload["text"]["mentioned_list"] = ["@all"]
+    return payload
+
+
+def _build_feishu_payload(group: NotifyGroup, content: str) -> dict:
+    payload = {
+        "msg_type": "text",
+        "content": {
+            "text": content,
+        },
+    }
+    if group.secret:
+        timestamp, sign = _make_feishu_sign(group.secret)
+        payload["timestamp"] = timestamp
+        payload["sign"] = sign
+    return payload
+
+
+def _make_feishu_sign(secret: str) -> tuple[str, str]:
+    timestamp = str(int(time.time()))
+    string_to_sign = f"{timestamp}\n{secret}"
+    sign = base64.b64encode(
+        hmac.new(
+            string_to_sign.encode("utf-8"),
+            digestmod=hashlib.sha256,
+        ).digest()
+    ).decode("utf-8")
+    return timestamp, sign

@@ -79,9 +79,9 @@ def create_template(path: Path) -> None:
         ),
         (
             NOTIFY_SHEET,
-            ["通知组", "企业微信Webhook", "是否@所有人", "备注"],
+            ["通知组", "Webhook地址", "通知类型", "签名密钥", "是否@所有人", "备注"],
             [
-                ["默认组", "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=REPLACE_WITH_YOUR_KEY", "否", "企业微信群机器人 webhook"],
+                ["默认组", "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=REPLACE_WITH_YOUR_KEY", "企业微信", "", "否", "企业微信或飞书群机器人 webhook"],
             ],
         ),
     ]
@@ -184,7 +184,9 @@ def _load_notify_groups(sheet) -> dict[str, NotifyGroup]:
             continue
         groups[name] = NotifyGroup(
             name=name,
-            webhook_url=str(_value(row, header_index, "企业微信Webhook") or "").strip(),
+            webhook_url=str(_value_any(row, header_index, ["Webhook地址", "企业微信Webhook", "飞书Webhook"]) or "").strip(),
+            webhook_type=str(_value_any(row, header_index, ["通知类型", "Webhook类型", "机器人类型"]) or "").strip(),
+            secret=str(_value_any(row, header_index, ["签名密钥", "飞书签名密钥", "Secret"]) or "").strip(),
             mention_all=_enabled(_value(row, header_index, "是否@所有人"), default=False),
         )
     return groups
@@ -279,4 +281,4 @@ def _widths_for_sheet(title: str) -> list[int]:
         return [10, 18, 22, 10, 44, 38, 38, 24, 14, 18, 12, 14]
     if title == VARIABLE_SHEET:
         return [18, 44, 12, 34]
-    return [18, 70, 14, 34]
+    return [18, 70, 14, 34, 14, 34]
