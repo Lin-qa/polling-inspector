@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
-from inspector.models import CheckItem, CheckResult, CheckState, DailySummary, InspectorConfig
+from inspector.models import CheckItem, CheckResult, CheckState, DailySummary, InspectorConfig, PreRequest
 from inspector.runner import PollingRunner, _next_summary_timestamp, run_once_inspection
 
 
@@ -111,6 +111,49 @@ class RunnerScheduleTests(unittest.TestCase):
         self.assertIs(returned, result)
         self.assertFalse(runner.states[item.key].alerted)
         self.assertEqual(notifier.recovery_count, 1)
+
+    def test_run_item_refreshes_variables_with_pre_request(self):
+        item = CheckItem(
+            enabled=True,
+            scenario_name="场景",
+            api_name="接口",
+            method="GET",
+            url="https://api.example.test/health?ticketid=${ticketid}",
+            headers={},
+            params="无",
+            success_rule="status=200",
+            interval_seconds=3600,
+            abnormal_interval_seconds=600,
+            timeout_ms=5000,
+            notify_group="默认组",
+            pre_request_name="登录",
+        )
+        pre_request = PreRequest(
+            name="登录",
+            method="POST",
+            url="https://api.example.test/login",
+            headers={},
+            params="无",
+            success_rule="status=200",
+            extractors={"ticketid": "result.ticketid"},
+            timeout_ms=5000,
+        )
+        config = InspectorConfig(
+            checks=[item],
+            variables={"ticketid": "old-ticket"},
+            pre_requests={"登录": pre_request},
+        )
+        runner = PollingRunner(config, once=False)
+        runner.stats_recorder = FakeStatsRecorder()
+        result = CheckResult(item=item, ok=True, http_status=200, elapsed_ms=1, checked_at="now")
+
+        with patch("inspector.runner.run_pre_request", return_value=(True, "", {"ticketid": "new-ticket"})) as pre, patch("inspector.runner.run_check", return_value=result) as check:
+            returned = runner._run_item(item)
+
+        self.assertIs(returned, result)
+        pre.assert_called_once()
+        check.assert_called_once_with(item, {"ticketid": "new-ticket"})
+        self.assertEqual(config.variables["ticketid"], "new-ticket")
 
     def test_daily_summary_uses_previous_six_to_current_six_window(self):
         item = make_item()

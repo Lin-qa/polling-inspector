@@ -14,6 +14,18 @@ class NotifyGroup:
 
 
 @dataclass(frozen=True)
+class PreRequest:
+    name: str
+    method: str
+    url: str
+    headers: dict[str, str]
+    params: str
+    success_rule: str
+    extractors: dict[str, str]
+    timeout_ms: int
+
+
+@dataclass(frozen=True)
 class CheckItem:
     enabled: bool
     scenario_name: str
@@ -27,6 +39,7 @@ class CheckItem:
     abnormal_interval_seconds: float
     timeout_ms: int
     notify_group: str
+    pre_request_name: str = ""
 
     @property
     def key(self) -> str:
@@ -59,6 +72,7 @@ class InspectorConfig:
     variables: dict[str, str] = field(default_factory=dict)
     sensitive_variables: set[str] = field(default_factory=set)
     notify_groups: dict[str, NotifyGroup] = field(default_factory=dict)
+    pre_requests: dict[str, PreRequest] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

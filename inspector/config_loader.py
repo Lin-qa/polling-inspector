@@ -8,11 +8,12 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from inspector.models import CheckItem, InspectorConfig, NotifyGroup
+from inspector.models import CheckItem, InspectorConfig, NotifyGroup, PreRequest
 
 CHECK_SHEET = "巡检接口"
 VARIABLE_SHEET = "前置变量"
 NOTIFY_SHEET = "通知配置"
+PRE_REQUEST_SHEET = "前置请求"
 
 
 def create_template(path: Path) -> None:
@@ -38,6 +39,7 @@ def create_template(path: Path) -> None:
                 "异常后轮询间隔秒",
                 "超时时间ms",
                 "通知组",
+                "前置请求",
             ],
             [
                 [
@@ -53,6 +55,7 @@ def create_template(path: Path) -> None:
                     600,
                     5000,
                     "默认组",
+                    "",
                 ],
                 [
                     "否",
@@ -67,6 +70,34 @@ def create_template(path: Path) -> None:
                     600,
                     5000,
                     "默认组",
+                    "示例登录",
+                ],
+            ],
+        ),
+        (
+            PRE_REQUEST_SHEET,
+            [
+                "是否启用",
+                "前置名称",
+                "请求方式",
+                "URL",
+                "请求头JSON",
+                "请求参数",
+                "成功判断",
+                "提取变量JSON",
+                "超时时间ms",
+            ],
+            [
+                [
+                    "否",
+                    "示例登录",
+                    "POST",
+                    "https://api.example.test/login",
+                    '{"Content-Type":"application/json"}',
+                    '{"username":"demo","password":"demo"}',
+                    "status=200; code=0",
+                    '{"token":"data.token"}',
+                    5000,
                 ],
             ],
         ),
@@ -115,6 +146,7 @@ def load_config(path: Path) -> InspectorConfig:
 
     variables, sensitive_variables = _load_variables(wb[VARIABLE_SHEET])
     notify_groups = _load_notify_groups(wb[NOTIFY_SHEET])
+    pre_requests = _load_pre_requests(wb[PRE_REQUEST_SHEET]) if PRE_REQUEST_SHEET in wb.sheetnames else {}
     checks = _load_checks(wb[CHECK_SHEET])
     enabled_checks = [item for item in checks if item.enabled]
     if not enabled_checks:
@@ -124,6 +156,7 @@ def load_config(path: Path) -> InspectorConfig:
         variables=variables,
         sensitive_variables=sensitive_variables,
         notify_groups=notify_groups,
+        pre_requests=pre_requests,
     )
 
 
@@ -153,12 +186,40 @@ def _load_checks(sheet) -> list[CheckItem]:
                 ),
                 timeout_ms=_int_or_default(_value_any(row, header_index, ["超时时间ms", "超时时间毫秒"]), _legacy_seconds_to_ms(_value(row, header_index, "超时时间秒"), 5000)),
                 notify_group=str(_value(row, header_index, "通知组") or "默认组").strip(),
+                pre_request_name=str(_value(row, header_index, "前置请求") or "").strip(),
             )
         )
     for item in checks:
         if item.enabled and (not item.scenario_name or not item.api_name or not item.url):
             raise ValueError("启用的巡检接口必须填写场景名称、接口名称和 URL。")
     return checks
+
+
+def _load_pre_requests(sheet) -> dict[str, PreRequest]:
+    header_index = _header_index(sheet)
+    pre_requests: dict[str, PreRequest] = {}
+    for row in sheet.iter_rows(min_row=2, values_only=True):
+        if not any(row):
+            continue
+        if not _enabled(_value(row, header_index, "是否启用"), default=True):
+            continue
+        name = str(_value(row, header_index, "前置名称") or "").strip()
+        if not name:
+            raise ValueError("启用的前置请求必须填写前置名称。")
+        pre_requests[name] = PreRequest(
+            name=name,
+            method=str(_value(row, header_index, "请求方式") or "GET").upper().strip(),
+            url=str(_value(row, header_index, "URL") or "").strip(),
+            headers=_parse_json_object(_value(row, header_index, "请求头JSON"), "请求头JSON"),
+            params=str(_value(row, header_index, "请求参数") or "").strip(),
+            success_rule=str(_value(row, header_index, "成功判断") or "").strip(),
+            extractors=_parse_json_object(_value(row, header_index, "提取变量JSON"), "提取变量JSON"),
+            timeout_ms=_int_or_default(_value_any(row, header_index, ["超时时间ms", "超时时间毫秒"]), 5000),
+        )
+    for item in pre_requests.values():
+        if not item.url:
+            raise ValueError(f"前置请求「{item.name}」必须填写 URL。")
+    return pre_requests
 
 
 def _load_variables(sheet) -> tuple[dict[str, str], set[str]]:
@@ -278,7 +339,9 @@ def _legacy_ms_to_seconds(value: Any, default_seconds: float) -> float:
 
 def _widths_for_sheet(title: str) -> list[int]:
     if title == CHECK_SHEET:
-        return [10, 18, 22, 10, 44, 38, 38, 24, 14, 18, 12, 14]
+        return [10, 18, 22, 10, 44, 38, 38, 24, 14, 18, 12, 14, 18]
+    if title == PRE_REQUEST_SHEET:
+        return [10, 18, 10, 44, 38, 38, 24, 36, 12]
     if title == VARIABLE_SHEET:
         return [18, 44, 12, 34]
     return [18, 70, 14, 34, 14, 34]

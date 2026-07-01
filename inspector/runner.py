@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from inspector.http_client import run_check
+from inspector.http_client import run_check, run_pre_request
 from inspector.models import CheckItem, CheckResult, CheckState, InspectorConfig, OnceRunReport
 from inspector.notifier import WeComNotifier
 from inspector.stats import StatsRecorder
@@ -69,7 +69,18 @@ class PollingRunner:
         result = None
 
         for attempt in range(1, MAX_ATTEMPTS_PER_CHECK + 1):
-            result = run_check(item, self.config.variables)
+            ok, reason = self._run_pre_request_if_needed(item)
+            if not ok:
+                result = CheckResult(
+                    item=item,
+                    ok=False,
+                    http_status="PRE",
+                    elapsed_ms=0,
+                    checked_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    reason=reason,
+                )
+            else:
+                result = run_check(item, self.config.variables)
             if result.ok:
                 break
             logging.warning(
@@ -108,6 +119,18 @@ class PollingRunner:
             self.notifier.notify_failure(result, state.consecutive_failures)
             state.alerted = True
         return result
+
+    def _run_pre_request_if_needed(self, item: CheckItem) -> tuple[bool, str]:
+        if not item.pre_request_name:
+            return True, ""
+        pre_request = self.config.pre_requests.get(item.pre_request_name)
+        if pre_request is None:
+            return False, f"未找到前置请求：{item.pre_request_name}"
+        ok, reason, variables = run_pre_request(pre_request, self.config.variables)
+        if not ok:
+            return False, reason
+        self.config.variables.update(variables)
+        return True, ""
 
     def _notify_startup_once(self) -> None:
         if self._startup_notified:
