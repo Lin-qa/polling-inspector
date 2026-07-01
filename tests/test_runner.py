@@ -155,6 +155,47 @@ class RunnerScheduleTests(unittest.TestCase):
         check.assert_called_once_with(item, {"ticketid": "new-ticket"})
         self.assertEqual(config.variables["ticketid"], "new-ticket")
 
+    def test_run_item_supports_multiple_pre_requests_in_order(self):
+        item = CheckItem(
+            enabled=True,
+            scenario_name="场景",
+            api_name="接口",
+            method="GET",
+            url="https://api.example.test/health?memberId=${member_id}",
+            headers={},
+            params="无",
+            success_rule="status=200",
+            interval_seconds=3600,
+            abnormal_interval_seconds=600,
+            timeout_ms=5000,
+            notify_group="默认组",
+            pre_request_name="登录, 会员详情",
+        )
+        config = InspectorConfig(
+            checks=[item],
+            variables={},
+            pre_requests={
+                "登录": PreRequest("登录", "POST", "https://api.example.test/login", {}, "无", "status=200", {"app_user_id": "result.useruuid"}, 5000),
+                "会员详情": PreRequest("会员详情", "POST", "https://api.example.test/member", {}, '{"appId":"${app_user_id}"}', "status=200", {"member_id": "data.memId"}, 5000),
+            },
+        )
+        runner = PollingRunner(config, once=False)
+        runner.stats_recorder = FakeStatsRecorder()
+        result = CheckResult(item=item, ok=True, http_status=200, elapsed_ms=1, checked_at="now")
+
+        with patch(
+            "inspector.runner.run_pre_request",
+            side_effect=[
+                (True, "", {"app_user_id": "user-uuid"}),
+                (True, "", {"member_id": "member-id"}),
+            ],
+        ) as pre, patch("inspector.runner.run_check", return_value=result) as check:
+            returned = runner._run_item(item)
+
+        self.assertIs(returned, result)
+        self.assertEqual(pre.call_count, 2)
+        check.assert_called_once_with(item, {"app_user_id": "user-uuid", "member_id": "member-id"})
+
     def test_daily_summary_uses_previous_six_to_current_six_window(self):
         item = make_item()
         runner = PollingRunner(InspectorConfig(checks=[item]), once=False)

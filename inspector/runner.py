@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -123,13 +124,19 @@ class PollingRunner:
     def _run_pre_request_if_needed(self, item: CheckItem) -> tuple[bool, str]:
         if not item.pre_request_name:
             return True, ""
-        pre_request = self.config.pre_requests.get(item.pre_request_name)
-        if pre_request is None:
-            return False, f"未找到前置请求：{item.pre_request_name}"
-        ok, reason, variables = run_pre_request(pre_request, self.config.variables)
-        if not ok:
-            return False, reason
-        self.config.variables.update(variables)
+        pre_request_names = [
+            name.strip()
+            for name in re.split(r"[,，;；\n]+", item.pre_request_name)
+            if name.strip()
+        ]
+        for pre_request_name in pre_request_names:
+            pre_request = self.config.pre_requests.get(pre_request_name)
+            if pre_request is None:
+                return False, f"未找到前置请求：{pre_request_name}"
+            ok, reason, variables = run_pre_request(pre_request, self.config.variables)
+            if not ok:
+                return False, reason
+            self.config.variables.update(variables)
         return True, ""
 
     def _notify_startup_once(self) -> None:
