@@ -155,6 +155,50 @@ class RunnerScheduleTests(unittest.TestCase):
         check.assert_called_once_with(item, {"ticketid": "new-ticket"})
         self.assertEqual(config.variables["ticketid"], "new-ticket")
 
+    def test_reuses_successful_pre_request_variables(self):
+        first_item = CheckItem(
+            enabled=True,
+            scenario_name="场景",
+            api_name="接口1",
+            method="GET",
+            url="https://api.example.test/one?ticketid=${ticketid}",
+            headers={},
+            params="无",
+            success_rule="status=200",
+            interval_seconds=3600,
+            abnormal_interval_seconds=600,
+            timeout_ms=5000,
+            notify_group="默认组",
+            pre_request_name="登录",
+        )
+        second_item = CheckItem(
+            enabled=True,
+            scenario_name="场景",
+            api_name="接口2",
+            method="GET",
+            url="https://api.example.test/two?ticketid=${ticketid}",
+            headers={},
+            params="无",
+            success_rule="status=200",
+            interval_seconds=3600,
+            abnormal_interval_seconds=600,
+            timeout_ms=5000,
+            notify_group="默认组",
+            pre_request_name="登录",
+        )
+        pre_request = PreRequest("登录", "POST", "https://api.example.test/login", {}, "无", "status=200", {"ticketid": "result.ticketid"}, 5000)
+        config = InspectorConfig(checks=[first_item, second_item], variables={}, pre_requests={"登录": pre_request})
+        runner = PollingRunner(config, once=False)
+        runner.stats_recorder = FakeStatsRecorder()
+        result = CheckResult(item=first_item, ok=True, http_status=200, elapsed_ms=1, checked_at="now")
+
+        with patch("inspector.runner.run_pre_request", return_value=(True, "", {"ticketid": "new-ticket"})) as pre, patch("inspector.runner.run_check", return_value=result):
+            runner._run_item(first_item)
+            runner._run_item(second_item)
+
+        pre.assert_called_once()
+        self.assertEqual(config.variables["ticketid"], "new-ticket")
+
     def test_run_item_supports_multiple_pre_requests_in_order(self):
         item = CheckItem(
             enabled=True,
@@ -196,34 +240,34 @@ class RunnerScheduleTests(unittest.TestCase):
         self.assertEqual(pre.call_count, 2)
         check.assert_called_once_with(item, {"app_user_id": "user-uuid", "member_id": "member-id"})
 
-    def test_daily_summary_uses_previous_six_to_current_six_window(self):
+    def test_daily_summary_uses_previous_five_to_current_five_window(self):
         item = make_item()
         runner = PollingRunner(InspectorConfig(checks=[item]), once=False)
         notifier = FakeNotifier()
         stats_recorder = FakeStatsRecorder()
         runner.notifier = notifier
         runner.stats_recorder = stats_recorder
-        due = datetime(2026, 6, 26, 18, 0, 0)
+        due = datetime(2026, 6, 26, 17, 0, 0)
         runner.next_summary_at = due.timestamp()
 
         runner._send_due_summaries(due.timestamp())
 
         self.assertEqual(notifier.summary_count, 1)
-        self.assertEqual(stats_recorder.summary_start, datetime(2026, 6, 25, 18, 0, 0))
+        self.assertEqual(stats_recorder.summary_start, datetime(2026, 6, 25, 17, 0, 0))
         self.assertEqual(stats_recorder.summary_end, due)
         self.assertEqual(stats_recorder.prune_cutoff, due - timedelta(days=8))
 
     def test_next_summary_timestamp(self):
-        before_summary = datetime(2026, 6, 26, 17, 59, 0)
-        after_summary = datetime(2026, 6, 26, 18, 1, 0)
+        before_summary = datetime(2026, 6, 26, 16, 59, 0)
+        after_summary = datetime(2026, 6, 26, 17, 1, 0)
 
         self.assertEqual(
             datetime.fromtimestamp(_next_summary_timestamp(before_summary.timestamp())),
-            datetime(2026, 6, 26, 18, 0, 0),
+            datetime(2026, 6, 26, 17, 0, 0),
         )
         self.assertEqual(
             datetime.fromtimestamp(_next_summary_timestamp(after_summary.timestamp())),
-            datetime(2026, 6, 27, 18, 0, 0),
+            datetime(2026, 6, 27, 17, 0, 0),
         )
 
     def test_once_inspection_sends_one_report_without_failure_alert(self):

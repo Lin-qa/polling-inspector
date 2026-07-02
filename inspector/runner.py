@@ -12,7 +12,7 @@ from inspector.notifier import WeComNotifier
 from inspector.stats import StatsRecorder
 
 MAX_ATTEMPTS_PER_CHECK = 3
-SUMMARY_HOUR = 18
+SUMMARY_HOUR = 17
 STATS_RETENTION_DAYS = 8
 
 
@@ -27,6 +27,7 @@ class PollingRunner:
         self.recovery_next_run_at: dict[str, float] = {}
         self.next_summary_at: float | None = None
         self._startup_notified = False
+        self._pre_request_cache: dict[str, dict[str, str]] = {}
 
     def run(self) -> None:
         logging.info("轮询巡检启动，接口数量：%s", len(self.config.checks))
@@ -130,12 +131,17 @@ class PollingRunner:
             if name.strip()
         ]
         for pre_request_name in pre_request_names:
+            cached_variables = self._pre_request_cache.get(pre_request_name)
+            if cached_variables is not None:
+                self.config.variables.update(cached_variables)
+                continue
             pre_request = self.config.pre_requests.get(pre_request_name)
             if pre_request is None:
                 return False, f"未找到前置请求：{pre_request_name}"
             ok, reason, variables = run_pre_request(pre_request, self.config.variables)
             if not ok:
                 return False, reason
+            self._pre_request_cache[pre_request_name] = variables
             self.config.variables.update(variables)
         return True, ""
 
